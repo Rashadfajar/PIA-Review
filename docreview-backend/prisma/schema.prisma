@@ -1,0 +1,74 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite" // bisa diganti postgresql
+  url      = env("DATABASE_URL")
+}
+
+enum CommentType {
+  GENERAL
+  ISSUE
+  SUGGESTION
+}
+
+model User {
+  id        String       @id @default(cuid())
+  email     String       @unique
+  name      String
+  password  String       // simpan hash bcrypt, bukan plaintext
+  createdAt DateTime     @default(now())
+
+  files     File[]
+  comments  Comment[]
+  access    FileAccess[]
+}
+
+model File {
+  id           String       @id @default(cuid())
+  ownerId      String
+  name         String
+  originalName String
+  mime         String
+  size         Int?
+  url          String
+  isPublic     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+
+  owner    User         @relation(fields: [ownerId], references: [id])
+  comments Comment[]    @relation("FileComments")  
+  access   FileAccess[] @relation("FileAccessList") 
+}
+
+model Comment {
+  id           String       @id @default(cuid())
+  fileId       String
+  userId       String
+  page         Int
+  lineNo       Int?
+  body         String
+  commentType  CommentType?
+  regionJson   String?
+  sectionTitle String?
+  createdAt    DateTime     @default(now())
+
+  file File @relation("FileComments", fields: [fileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@index([fileId])
+  @@index([userId])
+}
+
+model FileAccess {
+  id     String @id @default(cuid())
+  fileId String
+  userId String
+
+  file File @relation("FileAccessList", fields: [fileId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
+
+  @@unique([fileId, userId])
+  @@index([fileId])
+  @@index([userId])
+}
