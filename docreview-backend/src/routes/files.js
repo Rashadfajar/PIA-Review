@@ -1,4 +1,3 @@
-// src/routes/file.js
 import { Router } from "express";
 import multer from "multer";
 import fs from "fs";
@@ -11,7 +10,6 @@ const router = Router();
 const uploadDir = process.env.UPLOAD_DIR || "./uploads";
 fs.mkdirSync(uploadDir, { recursive: true });
 
-// ✅ Konfigurasi multer
 const storage = multer.diskStorage({
   destination: (_req, _file, cb) => cb(null, uploadDir),
   filename: (_req, file, cb) => {
@@ -29,7 +27,7 @@ const upload = multer({
   },
 });
 
-// ✅ GET: daftar file
+//  daftar file
 router.get("/", authRequired, async (req, res) => {
   try {
     const files = await prisma.file.findMany({
@@ -53,14 +51,13 @@ router.get("/", authRequired, async (req, res) => {
   }
 });
 
-// ✅ POST: upload file
+// upload file
 router.post("/", authRequired, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   try {
     const isPublic = req.body.isPublic === "true";
 
-    // ---- normalize allowedEmails ----
     let allowedEmails = [];
     const raw = req.body.allowedEmails;
 
@@ -121,7 +118,7 @@ router.post("/", authRequired, upload.single("file"), async (req, res) => {
   }
 });
 
-// ✅ PATCH: update akses
+// update akses
 router.patch("/:id/access", authRequired, async (req, res) => {
   try {
     const file = await prisma.file.findUnique({ where: { id: req.params.id } });
@@ -165,7 +162,7 @@ router.patch("/:id/access", authRequired, async (req, res) => {
   }
 });
 
-// ✅ DELETE: hapus file
+// hapus file
 router.delete("/:id", authRequired, async (req, res) => {
   try {
     const f = await prisma.file.findUnique({ where: { id: req.params.id } });

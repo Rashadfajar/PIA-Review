@@ -1,9 +1,8 @@
-// routes/auth.js
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { prisma } from "../prisma.js"; // Prisma client
-import { authRequired } from "../middleware/auth.js"; // Make sure the path is correct
+import { prisma } from "../prisma.js"; 
+import { authRequired } from "../middleware/auth.js"; 
 
 const router = Router();
 

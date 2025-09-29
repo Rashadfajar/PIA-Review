@@ -24,7 +24,6 @@ import { socket, ensureSocketConnected } from "../lib/socket";
 
 GlobalWorkerOptions.workerSrc = workerSrc;
 
-/* ---------- CSS FIX: pastikan textLayer tidak dipengaruhi Tailwind/preflight ---------- */
 function injectPdfCssFixes() {
   if (document.getElementById("__pdf_textlayer_fixes")) return;
   const style = document.createElement("style");
@@ -59,7 +58,7 @@ function injectPdfCssFixes() {
   document.head.appendChild(style);
 }
 
-/* ===================== Helpers overlay & seleksi (akurasi + tidak ganggu link/teks) ===================== */
+/* ===================== Helpers overlay & seleksi===================== */
 function getPageViewAtClient(viewer, clientX, clientY) {
   if (!viewer?._pages?.length) return null;
   for (const pv of viewer._pages) {
@@ -80,7 +79,7 @@ function ensureSelectionOverlay(pageView) {
     Object.assign(ov.style, {
       position: 'absolute',
       left: '0', top: '0', width: '100%', height: '100%',
-      pointerEvents: 'none',   // penting: jangan blok hyperlink/seleksi teks
+      pointerEvents: 'none', 
       zIndex: 50,
     });
     if (!pageView.div.style.position || pageView.div.style.position === 'static') {
@@ -119,7 +118,7 @@ function clearSelectionBox(overlay) {
 }
 
 export default function PdfWorkspace({ user, file, onBack }) {
-  // injeksi CSS fix sekali
+  // injeksi CSS 
   useEffect(() => { injectPdfCssFixes(); }, []);
 
   const viewerContainerRef = useRef(null);
@@ -193,7 +192,6 @@ export default function PdfWorkspace({ user, file, onBack }) {
     }
   }, [file.id, user.token]);
 
-  // panggil saat mount / file berubah
   useEffect(() => {
     fetchComments();
   }, [fetchComments]);
@@ -213,7 +211,7 @@ export default function PdfWorkspace({ user, file, onBack }) {
       setComments((prev) => (prev.some((x) => x.id === c.id) ? prev : [c, ...prev]));
     };
 
-    // 4) (opsional) logging error koneksi & join
+    // 4)logging error koneksi & join
     const onConnectError = (err) => {
       console.warn("socket connect_error:", err?.message || err);
     };
@@ -463,7 +461,6 @@ export default function PdfWorkspace({ user, file, onBack }) {
     const data = await res.json();
     if (!res.ok) throw new Error(data?.error || "Gagal menambahkan komentar");
 
-    // update komentar lokal supaya langsung muncul
     setComments((prev) => (prev.some((x) => x.id === data.id) ? prev : [data, ...prev]));
     return data;
   };
@@ -479,7 +476,7 @@ export default function PdfWorkspace({ user, file, onBack }) {
       const sanitizeForExcel = (v = "") => {
         const s = String(v ?? "");
         return /^[=+\-@]/.test(s) ? `'${s}` : s;
-        // prefix apostrof kalau mulai dengan = + - @
+ 
       };
 
       const rows = commentsFromDb.map((c) => ({
@@ -571,8 +568,6 @@ export default function PdfWorkspace({ user, file, onBack }) {
     }
   };
 
-
-  // ALT + drag = region selection; selain itu, teks/hyperlink berjalan normal
   useEffect(() => {
     const container = viewerContainerRef.current;
     const v = viewerRef.current;
@@ -616,7 +611,6 @@ export default function PdfWorkspace({ user, file, onBack }) {
         x2: Math.max(pdfX1, pdfX2),
         y2: Math.max(pdfY1, pdfY2),
       };
-      // gunakan pdfRect sesuai alurmu…
       clearSelectionBox(d.overlay);
       dragRef.current = { active: false, pageView: null, startView: [0, 0], overlay: null };
     };

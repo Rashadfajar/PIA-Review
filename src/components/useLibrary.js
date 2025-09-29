@@ -1,4 +1,3 @@
-// src/components/useLibrary.js
 import { useEffect, useState } from "react";
 import { apiJson, apiForm } from "./api";
 
@@ -15,7 +14,6 @@ export function useLibrary() {
   };
 
   useEffect(() => {
-    // kalau ada token, load files
     if (localStorage.getItem("token")) refresh();
   }, []);
 
@@ -23,7 +21,6 @@ export function useLibrary() {
     const fd = new FormData();
     fd.append("file", file);
     const saved = await apiForm("/files", fd); 
-    // prepend biar muncul di atas
     setFiles((prev) => [saved, ...prev]);
     return saved;
   };

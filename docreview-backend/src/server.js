@@ -1,4 +1,3 @@
-// src/server.js
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
@@ -31,13 +30,12 @@ app.use(
 );
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN, // contoh: http://localhost:5173
+    origin: process.env.CLIENT_ORIGIN, 
     credentials: true,
   })
 );
 app.use(rateLimit({ windowMs: 60_000, max: 300 }));
 
-// serve static uploads (PDFs)
 const uploadDir = process.env.UPLOAD_DIR || "./uploads";
 app.use("/uploads", express.static(path.resolve(__dirname, "..", uploadDir)));
 
@@ -60,7 +58,7 @@ export const io = new SocketIOServer(server, {
   transports: ["websocket", "polling"],
 });
 
-// 🔐 autentikasi JWT di handshake
+// 🔐 autentikasi JWT 
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token;

@@ -1,4 +1,3 @@
-// src/lib/canAccessFile.js
 import { prisma } from "../prisma.js";
 
 // Fungsi untuk mengambil data file dari database

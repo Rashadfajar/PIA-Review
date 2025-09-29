@@ -14,13 +14,11 @@ function App() {
   const [openFile, setOpenFile] = useState(null);
   const [error, setError] = useState(null);
 
-  // helper sanitasi
   const sanitizeId = (v) => {
     const s = String(v ?? "").trim();
     return s && s !== "undefined" && s !== "null" ? s : "";
   };
 
-  // 🔹 Restore dari localStorage lalu GET /auth/me agar id valid
   useEffect(() => {
     const token = localStorage.getItem("token") || "";
     const name = localStorage.getItem("name") || "";
@@ -43,16 +41,13 @@ function App() {
           role: me.role,
           email: me.email,
         });
-        // simpan balik yang benar
         localStorage.setItem("name", me.name || name || "");
         if (finalId) localStorage.setItem("id", finalId);
       } catch (e) {
         console.error("Failed to fetch /auth/me:", e);
-        // fallback pakai localStorage kalau ada id valid
         if (id) {
           setUser({ token, name, id });
         } else {
-          // token invalid → logout
           localStorage.clear();
           setUser(null);
         }
@@ -62,7 +57,6 @@ function App() {
     loadMe();
   }, []);
 
-  // 🔹 Setelah login sukses, langsung GET /auth/me agar id akurat
   const handleLoginSuccess = async (token, nameMaybe, idMaybe) => {
     try {
       localStorage.setItem("token", token);
@@ -98,7 +92,6 @@ function App() {
     localStorage.clear();
   };
 
-  // 🔹 Load files ketika user sudah ada
   useEffect(() => {
     if (!user?.token) return;
     const fetchFiles = async () => {

@@ -5,16 +5,16 @@ export function useAuth() {
 
   useEffect(() => {
     const token = localStorage.getItem("token");
-    const name = localStorage.getItem("name"); // Ambil nama pengguna dari localStorage
+    const name = localStorage.getItem("name"); 
     if (token && name) {
-      setUser({ token, name }); // Simpan token dan nama pengguna
+      setUser({ token, name }); 
     }
   }, []);
 
   const login = (token, name) => {
     setUser({ token, name });
     localStorage.setItem("token", token);
-    localStorage.setItem("name", name); // Simpan nama pengguna
+    localStorage.setItem("name", name);
   };
 
   const logout = () => {

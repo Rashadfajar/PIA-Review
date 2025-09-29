@@ -1,5 +1,3 @@
-// src/components/pdfHelpers.js
-
 // ===================== Helpers umum =====================
 export function fmtRoman(num, upper = false) {
   const map = [
@@ -73,7 +71,6 @@ async function safeGetPageLabels(pdf) {
 }
 
 // ===================== TOC (Daftar Isi) → Halaman PDF =====================
-
 /**
  * Detect TOC multi-halaman dari isi PDF dan map ke NOMOR HALAMAN PDF nyata.
  * Kebijakan:
@@ -92,8 +89,8 @@ export async function detectTOC(
     maxDepth = 2,
     includeFigures = false,
     indentSlack = 42,
-    ignoreRomanTokens = true,        // abaikan entri TOC yang pakai romawi
-    ignorePageLabelsInTOC = true,    // abaikan pageLabels saat memetakan TOC
+    ignoreRomanTokens = true,      
+    ignorePageLabelsInTOC = true,    
   } = {}
 ) {
   const labels = ignorePageLabelsInTOC ? null : (pageLabels || (await safeGetPageLabels(pdf)));
@@ -166,14 +163,14 @@ export async function detectTOC(
     if (typeof indent === "number" && indent > allowedIndent(level)) continue;
 
     const key = `${pageNum}|${title.slice(0, 120)}`;
-    if (pageNum < lastPage) continue;      // jaga urutan naik
-    if (key === lastKey) continue;         // hindari duplikat berurutan
+    if (pageNum < lastPage) continue;  
+    if (key === lastKey) continue;       
 
     sections.push({
       id: cryptoRandomId("sec"),
       title: cleanTOCTitle(title),
       level,
-      page: pageNum,      // <-- SELALU halaman PDF
+      page: pageNum,    
       pdfX: 0,
       pdfY: null,
       dest: null,
@@ -188,7 +185,6 @@ export async function detectTOC(
 
   return dedupeSequential(sections);
 }
-
 
 export async function detectTOCByLinks(
   pdf,
@@ -298,7 +294,6 @@ export async function detectTOCByLinks(
     xTol: mergeXTolerance,
   });
 
-  // pertahankan urutan TOC (jangan sort by page)
   const sections = [];
   let lastKey = "";
   for (const e of merged) {
@@ -308,10 +303,10 @@ export async function detectTOCByLinks(
       id: cryptoRandomId("sec"),
       title: e.title,
       level: e.level,
-      page: e.page,                 // halaman PDF riil
-      pdfX: e.pdfX ?? 0,            // <— simpan koordinat dari dest
-      pdfY: e.pdfY ?? null,         // <— simpan koordinat dari dest
-      dest: e.destArray || null,    // dest asli hyperlink
+      page: e.page,             
+      pdfX: e.pdfX ?? 0,        
+      pdfY: e.pdfY ?? null,        
+      dest: e.destArray || null,  
       source: "toc_link",
     });
     lastKey = key;
@@ -320,12 +315,9 @@ export async function detectTOCByLinks(
   return sections;
 }
 
-
-
-// Ambil line object yang overlap dengan rect link
 function pickLineObjByRect(lines, vrect) {
   if (!vrect || !lines?.length) return null;
-  const [x1, y1, x2, y2] = vrect; // viewport coords
+  const [x1, y1, x2, y2] = vrect;
   const midY = (y1 + y2) / 2;
   let best = null, bestDist = Infinity;
 
@@ -358,7 +350,6 @@ function pickNearestLineObjByRect(lines, vrect) {
  *  - indent/kolom mirip (xTol)
  * Ambil level terendah (angka terbesar) untuk hasil merge.
  */
-// GANTI fungsi lama:
 function mergeMultiLineTOCLinkEntries(entries, { yTol = 10, xTol = 30 } = {}) {
   const groups = [];
   for (const e of entries) {
@@ -375,7 +366,6 @@ function mergeMultiLineTOCLinkEntries(entries, { yTol = 10, xTol = 30 } = {}) {
       g.title = mergeTitle(g.title, e.title);
       g.level = Math.min(g.level, e.level);
       g.lastMidY = e.midY;
-      // page/pdfX/pdfY/dest tetap dari baris pertama agar konsisten
     } else {
       groups.push({
         tocPage: e.tocPage,
@@ -402,10 +392,6 @@ function mergeMultiLineTOCLinkEntries(entries, { yTol = 10, xTol = 30 } = {}) {
   }));
 }
 
-
-
-
-// TAMBAHKAN helper berikut:
 function looksLikeContinuation(prevTitle, nextTitle) {
   const A = cleanTOCTitle(prevTitle || "");
   const B = cleanTOCTitle(nextTitle || "");
@@ -418,8 +404,8 @@ function looksLikeContinuation(prevTitle, nextTitle) {
   //   - baris berikutnya diawali huruf kecil / tanda hubung
   //   - atau baris pertama tampak “menggantung” (tidak berakhir dengan titik/koma/colon)
   const startsLowerOrHyphen = /^[a-z\-]/.test(B);
-  const prevLooksHanging = !/[.:;]$/.test(A) && A.length >= 12; // kalimat panjang tanpa akhir jelas
-  const sharePrefix = sharesFirstToken(A, B); // token pertama sama → kemungkinan lanjutan
+  const prevLooksHanging = !/[.:;]$/.test(A) && A.length >= 12; 
+  const sharePrefix = sharesFirstToken(A, B);
 
   return startsLowerOrHyphen || prevLooksHanging || sharePrefix;
 }
@@ -444,11 +430,9 @@ function sharesFirstToken(a, b) {
   const A = (a || "").toLowerCase().split(/\s+/).filter(Boolean);
   const B = (b || "").toLowerCase().split(/\s+/).filter(Boolean);
   if (!A.length || !B.length) return false;
-  return A[0] === B[0] && A[0].length > 2; // token pertama sama & bukan sangat pendek
+  return A[0] === B[0] && A[0].length > 2; 
 }
 
-
-// gabung dua potongan judul dengan spasi tunggal, hindari duplikasi
 function mergeTitle(a, b) {
   const A = cleanTOCTitle(a || "");
   const B = cleanTOCTitle(b || "");
@@ -458,16 +442,13 @@ function mergeTitle(a, b) {
   return cleanTOCTitle(`${A} ${B}`);
 }
 
-
-// ——— helpers kecil untuk rect ↔ line
 function pickLineTextByRect(lines, vrect) {
   if (!vrect || !lines?.length) return null;
-  const [x1, y1, x2, y2] = vrect; // viewport coords, origin top-left
+  const [x1, y1, x2, y2] = vrect; 
   const midY = (y1 + y2) / 2;
   let best = null, bestDist = Infinity;
 
   for (const ln of lines) {
-    // overlap X minimal, dan Y tengah mendekati baris
     const overlapX = !(x2 < ln.x_min || x1 > ln.x_max);
     if (!overlapX) continue;
     const lnMid = (ln.y_min + ln.y_max) / 2;
@@ -494,14 +475,11 @@ function findLineForTitle(lines, title) {
   return lines.find(l => l.text.toLowerCase() === key) || null;
 }
 
-
-// ----- Estimasi offset berbasis konten -----
-
 async function estimateArabicOffsetByContent(pdf, tocEntries, {
-  minPage = 3,        // hindari cover/ halaman kosong di awal
-  scanLimit = 160,    // batas halaman yang discan untuk mencari judul
-  sample = 8,         // jumlah entri TOC arabic yang dicoba
-  acceptScore = 0.22, // minimal skor untuk dianggap cocok
+  minPage = 3,       
+  scanLimit = 160,    
+  sample = 8,         
+  acceptScore = 0.22, 
 } = {}) {
   const N = Math.min(pdf.numPages, scanLimit);
   const candidates = [];
@@ -517,7 +495,6 @@ async function estimateArabicOffsetByContent(pdf, tocEntries, {
     let bestPage = null;
     let bestScore = -1;
 
-    // Cari di seluruh rentang yang wajar (minPage..N)
     for (let p = Math.max(minPage, 1); p <= N; p++) {
       const head = await pageHeaderText(pdf, p);
       const s = titleMatchScore(key, head);
@@ -528,20 +505,18 @@ async function estimateArabicOffsetByContent(pdf, tocEntries, {
     }
   }
 
-  if (!candidates.length) return 0; // fallback: tidak ketemu → offset 0 (nanti masih ada refinement lokal)
+  if (!candidates.length) return 0; 
 
-  // median offset agar robust terhadap outlier
   candidates.sort((a,b)=>a-b);
   const mid = Math.floor(candidates.length / 2);
   const offset = (candidates.length % 2)
     ? candidates[mid]
     : Math.round((candidates[mid - 1] + candidates[mid]) / 2);
 
-  // batasi offset agar tidak liar
   return clamp(offset, -200, 400);
 }
 
-// halaman dikatakan “TOC” jika ada header atau ≥5 baris dot-leader
+
 function isTOCPage(lines) {
   const textBlock = lines.map((l) => l.text).join("\n");
   const hasTOCHeader = /(^|\s)(daftar\s+isi|table\s+of\s+contents|contents)(\s|$)/i.test(textBlock);
@@ -550,14 +525,12 @@ function isTOCPage(lines) {
   return dotLeaderLines >= 5;
 }
 
-// deteksi baris "Judul ..... 12" (variasi titik/bullet/long-spaces & "hal."/ "page")
 function isDotLeaderLine(text) {
   if (!text) return false;
   const t = String(text).replace(/\s+/g, " ").trim();
   return /.+?(?:\.{2,}|·{2,}|[\.\s]{4,})\s*(?:hal\.?|page)?\s*(\d+|[ivxlcdm]+)$/i.test(t);
 }
 
-// parse 1 baris TOC + bawa indent (x_min)
 function parseTOCLineFromLine(line) {
   const { text, x_min } = line || {};
   const parsed = parseTOCLine(text);
@@ -565,7 +538,6 @@ function parseTOCLineFromLine(line) {
   return { ...parsed, indent: typeof x_min === "number" ? x_min : 0 };
 }
 
-// parser baris TOC → { title, pageToken }
 function parseTOCLine(text) {
   if (!text) return null;
   let t = text
@@ -581,7 +553,6 @@ function parseTOCLine(text) {
     if (title && pageToken) return { title, pageToken };
   }
 
-  // fallback: ambil token angka/roman paling kanan
   const parts = t.split(" ");
   for (let i = parts.length - 1; i >= 0; i--) {
     const tok = cleanPageToken(parts[i]);
@@ -604,11 +575,10 @@ function cleanTOCTitle(s) {
   return (s || "").replace(/\s*\.*\s*$/g, "").replace(/\s+/g, " ").trim();
 }
 
-// token helpers
+
 function isRomanToken(t) { return /^[ivxlcdm]+$/i.test(t || ""); }
 function isArabicToken(t) { return /^\d+$/.test(t || ""); }
 
-// ===================== Refinement berbasis konten =====================
 
 async function refinePagesByContent(pdf, sections, { window = 3 } = {}) {
   const out = [];
@@ -635,7 +605,6 @@ async function findBestPageForTitle(pdf, title, guessPage, window = 3) {
     if (score > bestScore) { bestScore = score; bestPage = p; }
   }
 
-  // hanya terima jika ada kecocokan minimal
   return bestScore >= 0.15 ? bestPage : guessPage;
 }
 
@@ -648,8 +617,8 @@ async function pageHeaderText(pdf, pageNum) {
 function titleKey(title) {
   const t = (title || "")
     .toLowerCase()
-    .replace(/^[\divxlcdm\.\)\s-]+/, "")          // hapus prefix nomor/roman
-    .replace(/[^\p{L}\p{N}\s]/gu, " ")            // buang simbol
+    .replace(/^[\divxlcdm\.\)\s-]+/, "")   
+    .replace(/[^\p{L}\p{N}\s]/gu, " ")     
     .replace(/\s+/g, " ")
     .trim();
   return t.split(" ").filter(w => w.length > 2).slice(0, 6).join(" ");
@@ -677,8 +646,6 @@ function sequentialPresenceBonus(tokens, words) {
   }
   return i / Math.max(1, tokens.length);
 }
-
-// ===================== Ekstraksi teks halaman & heading fallback =====================
 
 async function extractPageLines(pdf, pageNum) {
   const page = await pdf.getPage(pageNum);
@@ -752,7 +719,7 @@ export async function detectHeadings(pdf, { maxPages = 80 } = {}) {
 }
 
 function groupLinesByY_coarse(items, tolY = 2.0) {
-  const arr = items.slice().sort((A, B) => A.y - B.y); // top->bottom
+  const arr = items.slice().sort((A, B) => A.y - B.y); 
   const lines = [];
   let cur = [], curY = null;
 

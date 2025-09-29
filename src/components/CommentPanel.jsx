@@ -13,7 +13,7 @@ export default function CommentPanel({
   activeSectionId,
   onRequestJumpSection,
   getDisplayLabel,
-  onReload,    // tambahan dari parent
+  onReload,   
 }) {
   const [sectionId, setSectionId] = useState("");
   const [text, setText] = useState("");

@@ -1,4 +1,3 @@
-// src/routes/comments.js
 import { Router } from "express";
 import { prisma } from "../prisma.js";
 import { authRequired } from "../middleware/auth.js";
@@ -23,7 +22,7 @@ function isInt(n) {
   return Number.isInteger(v);
 }
 
-/* List comments (min PII) */
+/* List comments */
 router.get("/:fileId", authRequired, async (req, res) => {
   const access = await canAccessFile(req.user.id, req.params.fileId);
   if (!access.ok) return res.status(access.status).json({ error: access.reason });
@@ -51,7 +50,7 @@ router.get("/:fileId", authRequired, async (req, res) => {
   }
 });
 
-/* Add comment (sanitized) */
+/* Add comment*/
 router.post("/:fileId", authRequired, async (req, res) => {
   const { sectionTitle, page, lineNo, body, commentType, regionBBox } = req.body;
 

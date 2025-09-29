@@ -1,4 +1,3 @@
-// middleware/auth.js
 import jwt from "jsonwebtoken";
 
 // Fungsi untuk mengekstrak token dari header Authorization
@@ -41,10 +40,9 @@ export function authRequired(req, res, next) {
   try {
     // Verifikasi token dengan secret key
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = decoded; // Set user dari decoded token
-    next(); // Lanjutkan ke middleware berikutnya
+    req.user = decoded;
+    next(); 
   } catch (error) {
-    // Jika token tidak valid atau kedaluwarsa
     console.error("Authorization failed:", error);
     return res.status(401).json({ error: "Invalid or expired token" });
   }

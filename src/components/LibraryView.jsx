@@ -13,23 +13,16 @@ export default function LibraryView({
   onDelete,
   onFileUpload,
 }) {
-  // ===== State umum =====
   const [uploadError, setUploadError] = useState("");
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-
-  // ===== Upload-form state (dipindahkan ke modal) =====
   const [fileToUpload, setFileToUpload] = useState(null);
   const [isPublic, setIsPublic] = useState(true);
   const [allowedUserEmails, setAllowedUserEmails] = useState([]);
-
-  // ===== Data user utk tagging (dimuat saat modal dibuka) =====
   const [allUsers, setAllUsers] = useState([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSearch, setUserSearch] = useState("");
-
-  // Normalisasi current user id -> string
   const currentUserId = useMemo(() => {
     const raw =
       user?.id ?? user?._id ?? user?.userId ?? user?.user?.id ?? user?.user?._id ?? "";
@@ -39,7 +32,6 @@ export default function LibraryView({
 
   const isAdmin = user?.role === "admin";
 
-  // Ambil users saat modal dibuka
   useEffect(() => {
     if (!showUploadModal) return;
     const controller = new AbortController();
@@ -76,7 +68,6 @@ export default function LibraryView({
     return () => controller.abort();
   }, [showUploadModal, onLogout]);
 
-  // Filter user by query
   const filteredUsers = useMemo(() => {
     const q = userSearch.trim().toLowerCase();
     if (!q) return allUsers;
@@ -87,7 +78,6 @@ export default function LibraryView({
     );
   }, [allUsers, userSearch]);
 
-  // Toggle & utilities
   const toggleEmail = (email) => {
     setAllowedUserEmails((prev) =>
       prev.includes(email) ? prev.filter((em) => em !== email) : [...prev, email]
@@ -100,7 +90,6 @@ export default function LibraryView({
   };
   const clearAll = () => setAllowedUserEmails([]);
 
-  // Submit upload
   const handleUploadSubmit = async (e) => {
     e?.preventDefault?.();
     if (!fileToUpload) {
@@ -127,7 +116,6 @@ export default function LibraryView({
       });
       onFileUpload?.(response.data);
 
-      // Reset form + tutup modal
       setFileToUpload(null);
       setIsPublic(true);
       setAllowedUserEmails([]);
@@ -146,7 +134,6 @@ export default function LibraryView({
   return (
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-5xl mx-auto py-6">
-        {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-xl font-semibold">Library</h2>
           <Button
@@ -160,7 +147,6 @@ export default function LibraryView({
           </Button>
         </div>
 
-        {/* Files */}
         {files.length === 0 ? (
           <div className="text-center text-gray-500">
             No files found. Click <span className="font-medium">Upload</span> to add a PDF or image.
@@ -224,15 +210,12 @@ export default function LibraryView({
         )}
       </div>
 
-      {/* ===== Upload Modal ===== */}
       {showUploadModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Backdrop */}
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => !isUploading && setShowUploadModal(false)}
           />
-          {/* Card */}
           <div className="relative z-10 w-full max-w-xl bg-white rounded-2xl shadow-lg">
             <form onSubmit={handleUploadSubmit} className="p-5 space-y-4">
               <div className="flex items-start justify-between">
@@ -254,7 +237,6 @@ export default function LibraryView({
                 </div>
               )}
 
-              {/* Pilih file */}
               <div>
                 <label className="block mb-1 font-medium">Choose file</label>
                 <input
@@ -271,7 +253,6 @@ export default function LibraryView({
                 )}
               </div>
 
-              {/* Visibility */}
               <div className="flex items-center gap-3">
                 <input
                   id="isPublicChk"
@@ -291,7 +272,6 @@ export default function LibraryView({
                 </span>
               </div>
 
-              {/* Private access picker */}
               {!isPublic && (
                 <div className="space-y-2">
                   <div className="flex items-end justify-between">
@@ -353,7 +333,6 @@ export default function LibraryView({
                 </div>
               )}
 
-              {/* Actions */}
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button
                   type="Button"

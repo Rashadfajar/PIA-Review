@@ -2,7 +2,6 @@ import React, { useEffect, useState } from "react";
 import Button from "./ui/Button";
 import useSpeechToText from "../hooks/useSpeechToText";
 
-/* Small toggle Button (fullscreen) */
 export function SmallSectionToggle({ onOpen }) {
   return (
     <Button
@@ -83,7 +82,6 @@ export function SlideOverComments({ open, onClose, children }) {
 
 export function MinimalCommentDock({ onExpand, comments }) {
   const safe = Array.isArray(comments) ? comments : [];
-  // TERBARU → index 0 (karena state di parent prepend)
   const latest = safe.length ? safe[0] : null;
 
   return (
@@ -138,7 +136,7 @@ export function MinimalCommentBox({
           page,
           line_no: null,
           body,
-          comment_type: "GENERAL", // gunakan enum yang valid di backend
+          comment_type: "GENERAL",
           region_bbox: null,
         })
       );
@@ -155,7 +153,6 @@ export function MinimalCommentBox({
     onFinal: (t) => setText((prev) => (prev ? prev + " " + t : t)),
   });
 
-  // Shortcut keyboard: Ctrl+Shift+M mic, Ctrl+Enter submit
   useEffect(() => {
     const onKey = (e) => {
       if (e.ctrlKey && e.shiftKey && e.key.toLowerCase() === "m") {

@@ -3,7 +3,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite" // bisa diganti postgresql
+  provider = "sqlite"
   url      = env("DATABASE_URL")
 }
 
@@ -17,7 +17,7 @@ model User {
   id        String       @id @default(cuid())
   email     String       @unique
   name      String
-  password  String       // simpan hash bcrypt, bukan plaintext
+  password  String      
   createdAt DateTime     @default(now())
 
   files     File[]

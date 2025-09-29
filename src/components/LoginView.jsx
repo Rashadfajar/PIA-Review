@@ -3,24 +3,22 @@ import Button from "./ui/Button";
 import axios from "axios";
 
 export default function LoginView({ onLoginSuccess }) {
-  const [mode, setMode] = useState("login"); // "login" | "register"
+  const [mode, setMode] = useState("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
-  const [message, setMessage] = useState(""); // bisa error atau sukses
-  const [isError, setIsError] = useState(false); // true = error, false = sukses
+  const [message, setMessage] = useState("");
+  const [isError, setIsError] = useState(false);
 
   const handleSubmit = async () => {
     setMessage("");
     try {
       if (mode === "login") {
-        // Handle login
         const response = await axios.post("http://localhost:4000/auth/login", { email, password });
         localStorage.setItem("token", response.data.token);
         localStorage.setItem("name", response.data.name);
         onLoginSuccess(response.data.token, response.data.name);
       } else {
-        // Handle register
         await axios.post("http://localhost:4000/auth/register", { name, email, password });
         setMode("login");
         setIsError(false);
