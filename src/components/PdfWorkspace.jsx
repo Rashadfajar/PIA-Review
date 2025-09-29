@@ -485,7 +485,7 @@ export default function PdfWorkspace({ user, file, onBack }) {
       const rows = commentsFromDb.map((c) => ({
         Section: sanitizeForExcel(c.sectionTitle || c.section?.title || ""),
         "Hal (PDF)": c.page,
-        Line: c.lineNo ?? c.line_no ?? "-",
+        // Line: c.lineNo ?? c.line_no ?? "-",
         Komentar: sanitizeForExcel(c.body),
         User: sanitizeForExcel(c.user?.name || c.user_name || ""),
         Waktu: new Date(c.createdAt || c.created_at).toLocaleString(),
