@@ -1,14 +1,23 @@
 {
+  "name": "docreview-backend",
   "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
   "scripts": {
     "dev": "nodemon --watch src --ext js --exec node src/server.js",
-    "prisma:push": "npx prisma db push",
-    "prisma:studio": "npx prisma studio"
+    "start": "node src/server.js",
+    "start:prod": "prisma migrate deploy && node src/server.js",
+    "postinstall": "prisma generate",
+    "prisma:push": "prisma db push",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "prisma:studio": "prisma studio"
   },
   "dependencies": {
+    "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
+    "dotenv": "^16.4.5",
     "express": "^5.1.0",
     "express-rate-limit": "^8.1.0",
     "helmet": "^8.1.0",
@@ -18,7 +27,6 @@
     "xss": "^1.0.15"
   },
   "devDependencies": {
-    "@prisma/client": "^6.16.2",
     "nodemon": "^3.1.10",
     "prisma": "^6.16.2"
   }
