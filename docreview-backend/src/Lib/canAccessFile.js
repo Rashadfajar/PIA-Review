@@ -1,58 +1,61 @@
 import { prisma } from "../prisma.js";
 
-// Fungsi untuk mengambil data file dari database
-async function getFile(fileId) {
-  return await prisma.file.findUnique({
-    where: { id: fileId },
-    select: { ownerId: true, isPublic: true, id: true }
-  });
-}
-
-// Fungsi untuk memeriksa apakah pengguna sudah diundang untuk mengakses file
-async function checkInvitedAccess(fileId, userId) {
-  const invited = await prisma.fileAccess.findUnique({
-    where: { fileId_userId: { fileId, userId } }
-  });
-  return invited !== null;
-}
-
-// Fungsi untuk memvalidasi apakah pengguna ada di database
-async function validateUser(userId) {
-  const user = await prisma.user.findUnique({
-    where: { id: userId }
-  });
-  return user !== null;
-}
-
-// Fungsi utama untuk memeriksa akses pengguna ke file
+/**
+ * canAccessFile(userId, fileId)
+ * Return shape:
+ *  - { ok: true, file }
+ *  - { ok: false, status: <number>, reason: <string> }
+ */
 export async function canAccessFile(userId, fileId) {
-  // Validasi pengguna
-  const userValid = await validateUser(userId);
-  if (!userValid) {
-    return { ok: false, status: 400, reason: "Invalid user" };
-  }
-
-  // Ambil data file
-  let file;
   try {
-    file = await getFile(fileId);
-  } catch (error) {
-    console.error("Error fetching file:", error);
+    // 1) Ambil info file duluan
+    const file = await prisma.file.findUnique({
+      where: { id: fileId },
+      select: { id: true, ownerId: true, isPublic: true },
+    });
+
+    if (!file) {
+      return { ok: false, status: 404, reason: "Not found" };
+    }
+
+    // 2) File publik: siapa pun boleh akses
+    if (file.isPublic) {
+      return { ok: true, file };
+    }
+
+    // 3) Kalau tidak publik & tidak ada user -> tolak
+    if (!userId) {
+      return { ok: false, status: 403, reason: "Forbidden" };
+    }
+
+    // 4) Pemilik file -> ok
+    if (file.ownerId === userId) {
+      return { ok: true, file };
+    }
+
+    // 5) Validasi user hanya kalau diperlukan (ada userId)
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true },
+    });
+    if (!user) {
+      return { ok: false, status: 400, reason: "Invalid user" };
+    }
+
+    // 6) Cek undangan/akses eksplisit (pastikan ada unique composite di schema)
+    const invited = await prisma.fileAccess.findUnique({
+      where: { fileId_userId: { fileId: file.id, userId } },
+      select: { fileId: true }, // minimal payload
+    });
+
+    if (invited) {
+      return { ok: true, file };
+    }
+
+    // 7) Default: tolak
+    return { ok: false, status: 403, reason: "Forbidden" };
+  } catch (err) {
+    console.error("canAccessFile error:", err);
     return { ok: false, status: 500, reason: "Internal Server Error" };
   }
-
-  // Jika file tidak ditemukan
-  if (!file) {
-    return { ok: false, status: 404, reason: "Not found" };
-  }
-
-  // Cek apakah pengguna adalah pemilik file, file publik, atau sudah diundang
-  const canAccess = file.ownerId === userId || file.isPublic || await checkInvitedAccess(fileId, userId);
-
-  if (canAccess) {
-    return { ok: true, file };
-  }
-
-  // Jika akses ditolak
-  return { ok: false, status: 403, reason: "Forbidden" };
 }

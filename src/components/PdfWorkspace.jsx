@@ -1,12 +1,12 @@
 import React, { useEffect, useRef, useState, useCallback  } from "react";
 import Button from "./ui/Button";
-import { API_BASE } from "./api";
+import { API_BASE  } from "./api";
 import { getDocument, GlobalWorkerOptions } from "pdfjs-dist";
 import workerSrc from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import "pdfjs-dist/web/pdf_viewer.css";
 import { EventBus, PDFViewer, PDFLinkService } from "pdfjs-dist/web/pdf_viewer";
 import * as XLSX from "xlsx";
-import axios from "axios";
+import { apiJson  } from "./api";
 import SectionList from "./SectionList";
 import CommentPanel from "./CommentPanel";
 import PageInfoChip from "./PageInfoChip";
@@ -117,6 +117,15 @@ function clearSelectionBox(overlay) {
   if (box) box.style.display = 'none';
 }
 
+function joinUrl(base, path) {
+  if (!base) return path || "";
+  if (!path) return base;
+  const b = base.endsWith("/") ? base.slice(0, -1) : base;
+  const p = path.startsWith("/") ? path : `/${path}`;
+  const encoded = p.split("/").map((seg, i) => (i === 0 ? seg : encodeURIComponent(seg))).join("/");
+  return `${b}${encoded}`;
+}
+
 export default function PdfWorkspace({ user, file, onBack }) {
   // injeksi CSS 
   useEffect(() => { injectPdfCssFixes(); }, []);
@@ -183,14 +192,12 @@ export default function PdfWorkspace({ user, file, onBack }) {
 
   const fetchComments = useCallback(async () => {
     try {
-      const { data } = await axios.get(`${API_BASE}/comments/${file.id}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
+      const data = await apiJson(`/comments/${file.id}`);
       setComments(Array.isArray(data) ? data : []);
     } catch (e) {
       console.error("Gagal mengambil komentar:", e);
     }
-  }, [file.id, user.token]);
+  }, [file.id]);
 
   useEffect(() => {
     fetchComments();
@@ -240,7 +247,17 @@ export default function PdfWorkspace({ user, file, onBack }) {
     (async () => {
       setLoading(true);
       try {
-        const pdfUrl = file.url?.startsWith("http") ? file.url : `${API_BASE}${file.url}`;
+        const pdfUrl = (() => {
+          // 1) viewUrl dari LibraryView (paling aman)
+          if (file.viewUrl && /^https?:\/\//i.test(file.viewUrl)) return file.viewUrl;
+          // 2) absoluteUrl dari backend
+          if (file.absoluteUrl && /^https?:\/\//i.test(file.absoluteUrl)) return file.absoluteUrl;
+          // 3) url sudah absolut
+          if (file.url && /^https?:\/\//i.test(file.url)) return file.url;
+          // 4) url relatif → gabungkan dengan API_BASE
+          return joinUrl(API_BASE, file.url || "");
+        })();
+        console.log("[PDF] url:", pdfUrl, { file, API_BASE });
         const loadingTask = getDocument({ url: pdfUrl, useSystemFonts: true });
 
         const _pdf = await loadingTask.promise;
@@ -346,7 +363,7 @@ export default function PdfWorkspace({ user, file, onBack }) {
         linkServiceRef.current?.setDocument(null);
       } catch {}
     };
-  }, [file.url]);
+  }, [file.id, file.viewUrl, file.absoluteUrl, file.url]);
 
   useEffect(() => {
     const container = viewerContainerRef.current;
@@ -449,17 +466,10 @@ export default function PdfWorkspace({ user, file, onBack }) {
       regionBBox: region_bbox ?? null,
     };
 
-    const res = await fetch(`${API_BASE}/comments/${file.id}`, {
+    const data = await apiJson(`/comments/${file.id}`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${user.token}`,
-      },
-      body: JSON.stringify(payload),
+      body: payload,
     });
-
-    const data = await res.json();
-    if (!res.ok) throw new Error(data?.error || "Gagal menambahkan komentar");
 
     setComments((prev) => (prev.some((x) => x.id === data.id) ? prev : [data, ...prev]));
     return data;
@@ -468,11 +478,7 @@ export default function PdfWorkspace({ user, file, onBack }) {
 
   const exportExcel = async () => {
     try {
-      const response = await axios.get(`${API_BASE}/comments/${file.id}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      const commentsFromDb = response.data;
-
+      const commentsFromDb = await apiJson(`/comments/${file.id}`);
       const sanitizeForExcel = (v = "") => {
         const s = String(v ?? "");
         return /^[=+\-@]/.test(s) ? `'${s}` : s;
@@ -549,7 +555,17 @@ export default function PdfWorkspace({ user, file, onBack }) {
     if (!file?.url) return;
     setLoading(true);
     try {
-      const pdfUrl = file.url?.startsWith("http") ? file.url : `${API_BASE}${file.url}`;
+      const pdfUrl = (() => {
+        // 1) viewUrl dari LibraryView (paling aman)
+        if (file.viewUrl && /^https?:\/\//i.test(file.viewUrl)) return file.viewUrl;
+        // 2) absoluteUrl dari backend
+        if (file.absoluteUrl && /^https?:\/\//i.test(file.absoluteUrl)) return file.absoluteUrl;
+        // 3) url sudah absolut
+        if (file.url && /^https?:\/\//i.test(file.url)) return file.url;
+        // 4) url relatif → gabungkan dengan API_BASE
+        return joinUrl(API_BASE, file.url || "");
+      })();
+      console.log("[PDF] url:", pdfUrl, { file, API_BASE });
       const loadingTask = getDocument({ url: pdfUrl, useSystemFonts: true });
       const _pdf = await loadingTask.promise;
       pdfRef.current = _pdf;

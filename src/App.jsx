@@ -3,9 +3,7 @@ import LoginView from "./components/LoginView";
 import LibraryView from "./components/LibraryView";
 import PdfWorkspace from "./components/PdfWorkspace";
 import Button from "./components/ui/Button";
-import axios from "axios";
-
-const API_BASE = import.meta?.env?.VITE_API_URL || "http://localhost:4000";
+import { apiJson } from "./components/api"; 
 
 function App() {
   const [user, setUser] = useState(null);
@@ -19,6 +17,7 @@ function App() {
     return s && s !== "undefined" && s !== "null" ? s : "";
   };
 
+  // Load profil jika sudah ada token di localStorage
   useEffect(() => {
     const token = localStorage.getItem("token") || "";
     const name = localStorage.getItem("name") || "";
@@ -27,12 +26,9 @@ function App() {
 
     if (!token) return;
 
-    const loadMe = async () => {
+    (async () => {
       try {
-        const res = await axios.get(`${API_BASE}/auth/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        const me = res.data || {};
+        const me = await apiJson("/auth/me");
         const finalId = sanitizeId(me.id || me._id || id);
         setUser({
           token,
@@ -52,20 +48,16 @@ function App() {
           setUser(null);
         }
       }
-    };
-
-    loadMe();
+    })();
   }, []);
 
+  // Dipanggil setelah LoginView sukses
   const handleLoginSuccess = async (token, nameMaybe, idMaybe) => {
     try {
       localStorage.setItem("token", token);
       if (nameMaybe) localStorage.setItem("name", nameMaybe);
 
-      const res = await axios.get(`${API_BASE}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      const me = res.data || {};
+      const me = await apiJson("/auth/me");
       const finalId = sanitizeId(me.id || me._id || idMaybe);
 
       setUser({
@@ -92,24 +84,22 @@ function App() {
     localStorage.clear();
   };
 
+  // Ambil daftar file setelah user tersedia
   useEffect(() => {
     if (!user?.token) return;
-    const fetchFiles = async () => {
+    (async () => {
       setLoadingFiles(true);
       setError(null);
       try {
-        const response = await axios.get(`${API_BASE}/files`, {
-          headers: { Authorization: `Bearer ${user.token}` },
-        });
-        setFiles(response.data);
+        const data = await apiJson("/files");
+        setFiles(Array.isArray(data) ? data : []);
       } catch (err) {
         console.error("Failed to load files:", err);
         setError("Gagal memuat file. Cek API atau token.");
       } finally {
         setLoadingFiles(false);
       }
-    };
-    fetchFiles();
+    })();
   }, [user?.token]);
 
   if (!user) {
@@ -132,10 +122,10 @@ function App() {
 
   const handleDelete = async (fileId) => {
     try {
-      await axios.delete(`${API_BASE}/files/${fileId}`, {
-        headers: { Authorization: `Bearer ${user.token}` },
-      });
-      setFiles((prev) => prev.filter((file) => (file.id || file._id) !== fileId));
+      await apiJson(`/files/${fileId}`, { method: "DELETE" });
+      setFiles((prev) =>
+        prev.filter((file) => (file.id || file._id) !== fileId)
+      );
     } catch (err) {
       console.error("Failed to delete file:", err);
       setError("Gagal menghapus file.");
@@ -162,8 +152,9 @@ function App() {
         </div>
       </div>
 
-
-      {error && <div className="p-4 bg-red-100 text-red-600 text-sm">{error}</div>}
+      {error && (
+        <div className="p-4 bg-red-100 text-red-600 text-sm">{error}</div>
+      )}
 
       <LibraryView
         user={user}

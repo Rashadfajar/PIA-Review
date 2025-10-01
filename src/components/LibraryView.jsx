@@ -1,8 +1,6 @@
 import React, { useState, useEffect, useMemo } from "react";
 import Button from "./ui/Button";
-import axios from "axios";
-
-const API_BASE = import.meta?.env?.VITE_API_URL || "http://localhost:4000";
+import { apiJson, apiForm, fileUrl  } from "./api";
 
 export default function LibraryView({
   user,
@@ -23,32 +21,30 @@ export default function LibraryView({
   const [usersLoading, setUsersLoading] = useState(false);
   const [usersError, setUsersError] = useState("");
   const [userSearch, setUserSearch] = useState("");
+
   const currentUserId = useMemo(() => {
     const raw =
-      user?.id ?? user?._id ?? user?.userId ?? user?.user?.id ?? user?.user?._id ?? "";
+      user?.id ??
+      user?._id ??
+      user?.userId ??
+      user?.user?.id ??
+      user?.user?._id ??
+      "";
     const s = String(raw ?? "").trim();
     return s && s !== "undefined" && s !== "null" ? s : "";
   }, [user]);
 
   const isAdmin = user?.role === "admin";
 
+  // Load daftar user saat modal upload dibuka
   useEffect(() => {
     if (!showUploadModal) return;
-    const controller = new AbortController();
     (async () => {
       try {
         setUsersLoading(true);
         setUsersError("");
-        const token = localStorage.getItem("token");
-        if (!token) {
-          setUsersError("No auth token found.");
-          return;
-        }
-        const res = await axios.get(`${API_BASE}/auth/users`, {
-          headers: { Authorization: `Bearer ${token}` },
-          signal: controller.signal,
-        });
-        const list = (res.data || [])
+        const data = await apiJson("/auth/users");
+        const list = (data || [])
           .filter((u) => u?.email)
           .map((u) => ({
             id: u.id || u._id || u.email,
@@ -57,15 +53,14 @@ export default function LibraryView({
           }));
         setAllUsers(list);
       } catch (err) {
-        if (axios.isCancel(err)) return;
         console.error("Failed to load users:", err);
-        if (err?.response?.status === 401 && onLogout) onLogout();
-        setUsersError(err?.response?.data?.error || "Failed to load users.");
+        // Jika token invalid, biar parent yang handle logout (opsional)
+        if (err?.message?.toLowerCase?.().includes("unauthorized") && onLogout) onLogout();
+        setUsersError(err?.message || "Failed to load users.");
       } finally {
         setUsersLoading(false);
       }
     })();
-    return () => controller.abort();
   }, [showUploadModal, onLogout]);
 
   const filteredUsers = useMemo(() => {
@@ -103,18 +98,11 @@ export default function LibraryView({
       formData.append("file", fileToUpload);
       formData.append("isPublic", String(isPublic));
       if (!isPublic && allowedUserEmails.length > 0) {
+        // backend menerima multiple key "allowedEmails"
         allowedUserEmails.forEach((em) => formData.append("allowedEmails", em));
       }
-      const token = localStorage.getItem("token");
-      if (!token) {
-        setUploadError("No auth token found.");
-        setIsUploading(false);
-        return;
-      }
-      const response = await axios.post(`${API_BASE}/files`, formData, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      onFileUpload?.(response.data);
+      const data = await apiForm("/files", formData);
+      onFileUpload?.(data);
 
       setFileToUpload(null);
       setIsPublic(true);
@@ -123,7 +111,7 @@ export default function LibraryView({
       setShowUploadModal(false);
     } catch (error) {
       console.error("Failed to upload file:", error);
-      setUploadError(error.response?.data?.error || "Error uploading file. Please try again.");
+      setUploadError(error?.message || "Error uploading file. Please try again.");
     } finally {
       setIsUploading(false);
     }
@@ -157,7 +145,8 @@ export default function LibraryView({
               const fileOwnerId = String(
                 file?.ownerId ?? file?.owner_id ?? file?.owner?.id ?? ""
               );
-              const isOwner = !!currentUserId && !!fileOwnerId && fileOwnerId === currentUserId;
+              const isOwner =
+                !!currentUserId && !!fileOwnerId && fileOwnerId === currentUserId;
               const canDelete = isOwner || isAdmin;
 
               const name = file?.originalName || file?.name || "Untitled";
@@ -167,8 +156,14 @@ export default function LibraryView({
 
               const privateCount = file?.access?.length ?? 0;
               const privacyBadge = file?.isPublic
-                ? { text: "Public", cls: "bg-green-100 text-green-700 border-green-200" }
-                : { text: "Private" + (privateCount ? ` • ${privateCount}` : ""), cls: "bg-yellow-100 text-yellow-700 border-yellow-200" };
+                ? {
+                    text: "Public",
+                    cls: "bg-green-100 text-green-700 border-green-200",
+                  }
+                : {
+                    text: "Private" + (privateCount ? ` • ${privateCount}` : ""),
+                    cls: "bg-yellow-100 text-yellow-700 border-yellow-200",
+                  };
 
               return (
                 <div
@@ -190,7 +185,11 @@ export default function LibraryView({
                   <div className="flex gap-2 shrink-0">
                     <Button
                       className="px-3 py-1 rounded-lg border"
-                      onClick={() => onOpen?.(file)}
+                      onClick={() => {
+                        const viewUrl = fileUrl(file);
+                        console.log("Opening file:", { id: file?.id, viewUrl, file });
+                        onOpen?.({ ...file, viewUrl });
+                      }}
                     >
                       Open
                     </Button>
@@ -221,7 +220,7 @@ export default function LibraryView({
               <div className="flex items-start justify-between">
                 <h3 className="text-lg font-semibold">Upload File</h3>
                 <Button
-                  type="Button"
+                  type="button"
                   className="text-gray-500 hover:text-black"
                   onClick={() => !isUploading && setShowUploadModal(false)}
                   disabled={isUploading}
@@ -268,7 +267,9 @@ export default function LibraryView({
                   Make file Public
                 </label>
                 <span className="text-sm text-gray-500">
-                  {isPublic ? "Anyone in the app can view." : "Only selected users can access."}
+                  {isPublic
+                    ? "Anyone in the app can view."
+                    : "Only selected users can access."}
                 </span>
               </div>
 
@@ -278,15 +279,17 @@ export default function LibraryView({
                     <label className="block font-medium">Grant access to users</label>
                     <div className="flex gap-2 text-sm">
                       <Button
-                        type="Button"
+                        type="button"
                         className="px-2 py-1 border rounded bg-white"
                         onClick={selectAllFiltered}
-                        disabled={usersLoading || filteredUsers.length === 0 || isUploading}
+                        disabled={
+                          usersLoading || filteredUsers.length === 0 || isUploading
+                        }
                       >
                         Select all (filtered)
                       </Button>
                       <Button
-                        type="Button"
+                        type="button"
                         className="px-2 py-1 border rounded bg-white"
                         onClick={clearAll}
                         disabled={allowedUserEmails.length === 0 || isUploading}
@@ -306,13 +309,20 @@ export default function LibraryView({
                   />
 
                   <div className="border rounded-lg p-2 max-h-56 overflow-y-auto bg-white">
-                    {usersLoading && <div className="text-gray-500">Loading users…</div>}
-                    {usersError && <div className="text-red-600">Error: {usersError}</div>}
+                    {usersLoading && (
+                      <div className="text-gray-500">Loading users…</div>
+                    )}
+                    {usersError && (
+                      <div className="text-red-600">Error: {usersError}</div>
+                    )}
                     {!usersLoading && !usersError && filteredUsers.length === 0 && (
                       <div className="text-gray-500">No users found.</div>
                     )}
                     {filteredUsers.map((u) => (
-                      <label key={u.id} className="flex items-center gap-2 py-1 cursor-pointer">
+                      <label
+                        key={u.id}
+                        className="flex items-center gap-2 py-1 cursor-pointer"
+                      >
                         <input
                           type="checkbox"
                           checked={allowedUserEmails.includes(u.email)}
@@ -321,21 +331,26 @@ export default function LibraryView({
                         />
                         <div className="flex flex-col">
                           <span className="text-sm">{u.email}</span>
-                          {u.name && <span className="text-xs text-gray-500">{u.name}</span>}
+                          {u.name && (
+                            <span className="text-xs text-gray-500">{u.name}</span>
+                          )}
                         </div>
                       </label>
                     ))}
                   </div>
 
                   <div className="text-sm text-gray-700">
-                    Selected: {allowedUserEmails.length > 0 ? allowedUserEmails.join(", ") : "None"}
+                    Selected:{" "}
+                    {allowedUserEmails.length > 0
+                      ? allowedUserEmails.join(", ")
+                      : "None"}
                   </div>
                 </div>
               )}
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button
-                  type="Button"
+                  type="button"
                   className="px-3 py-2 border rounded-lg bg-white"
                   onClick={() => setShowUploadModal(false)}
                   disabled={isUploading}

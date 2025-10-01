@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import Button from "./ui/Button";
-import axios from "axios";
+import { apiJson } from "./api"; // gunakan helper fetch kamu
 
 export default function LoginView({ onLoginSuccess }) {
   const [mode, setMode] = useState("login");
@@ -9,24 +9,38 @@ export default function LoginView({ onLoginSuccess }) {
   const [name, setName] = useState("");
   const [message, setMessage] = useState("");
   const [isError, setIsError] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const handleSubmit = async () => {
+    if (loading) return;
     setMessage("");
+    setIsError(false);
+    setLoading(true);
     try {
       if (mode === "login") {
-        const response = await axios.post("http://localhost:4000/auth/login", { email, password });
-        localStorage.setItem("token", response.data.token);
-        localStorage.setItem("name", response.data.name);
-        onLoginSuccess(response.data.token, response.data.name);
+        const data = await apiJson("/auth/login", {
+          method: "POST",
+          body: { email, password },
+        });
+        // BE balas: { token, user: { id, name, email } }
+        localStorage.setItem("token", data.token);
+        const displayName = data.user?.name || data.user?.email || "";
+        localStorage.setItem("name", displayName);
+        onLoginSuccess?.(data.token, displayName);
       } else {
-        await axios.post("http://localhost:4000/auth/register", { name, email, password });
+        await apiJson("/auth/register", {
+          method: "POST",
+          body: { name, email, password },
+        });
         setMode("login");
         setIsError(false);
         setMessage("Registration successful, please login.");
       }
     } catch (err) {
       setIsError(true);
-      setMessage(err.response?.data?.error || "An error occurred");
+      setMessage(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -71,22 +85,34 @@ export default function LoginView({ onLoginSuccess }) {
           onChange={(e) => setPassword(e.target.value)}
         />
 
-        <Button className="w-full py-3 rounded-xl bg-black text-white hover:bg-gray-900" onClick={handleSubmit}>
-          {mode === "login" ? "Login" : "Register"}
+        <Button
+          className={`w-full py-3 rounded-xl text-white ${
+            loading ? "bg-gray-500" : "bg-black hover:bg-gray-900"
+          }`}
+          onClick={handleSubmit}
+          disabled={loading}
+        >
+          {loading ? "Please wait..." : mode === "login" ? "Login" : "Register"}
         </Button>
 
         <div className="text-sm text-center">
           {mode === "login" ? (
             <>
-              Don't have an account?{" "}
-              <Button className="text-blue-600 underline hover:text-blue-800" onClick={() => setMode("register")}>
+              Don&apos;t have an account?{" "}
+              <Button
+                className="text-blue-600 underline hover:text-blue-800"
+                onClick={() => setMode("register")}
+              >
                 Register
               </Button>
             </>
           ) : (
             <>
               Already have an account?{" "}
-              <Button className="text-blue-600 underline hover:text-blue-800" onClick={() => setMode("login")}>
+              <Button
+                className="text-blue-600 underline hover:text-blue-800"
+                onClick={() => setMode("login")}
+              >
                 Login
               </Button>
             </>
