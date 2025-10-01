@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import fs from "fs";
+import fsPromises from "fs/promises";
 import path from "path";
 import { prisma } from "../prisma.js";
 import { authRequired } from "../middleware/auth.js";
@@ -170,14 +171,20 @@ router.delete("/:id", authRequired, async (req, res) => {
     if (f.ownerId !== req.user.id)
       return res.status(403).json({ error: "Forbidden" });
 
-    try {
-      const base = path.basename(f.url || "");
+    // Hapus file fisik
+    if (f.url) {
+      const base = path.basename(f.url);
       const filePath = path.join(uploadDir, base);
-      if (base && fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (e) {
-      console.error("Failed to delete physical file:", e.message);
+      try {
+        await fsPromises.access(filePath); // cek file ada
+        await fsPromises.unlink(filePath); // hapus file
+        console.log("Deleted file:", filePath);
+      } catch (e) {
+        console.warn("File not found or failed to delete:", filePath, e.message);
+      }
     }
 
+    // Hapus data terkait di database
     await prisma.comment.deleteMany({ where: { fileId: f.id } });
     await prisma.fileAccess.deleteMany({ where: { fileId: f.id } });
     await prisma.file.delete({ where: { id: f.id } });
