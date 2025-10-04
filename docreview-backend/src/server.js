@@ -1,14 +1,14 @@
+import dotenv from "dotenv";
+dotenv.config();
+
 import express from "express";
 import cors from "cors";
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import { fileURLToPath } from "url";
-import dotenv from "dotenv";
 import http from "http";
 import { Server as SocketIOServer } from "socket.io";
-
-dotenv.config();
 
 import authRoutes from "./routes/auth.js";
 import fileRoutes from "./routes/files.js";
@@ -29,22 +29,30 @@ app.use(
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
+
+// CORS: allow localhost + production(s)
+const ALLOWED_ORIGINS = [
+  "http://localhost:5173",
+  process.env.CLIENT_ORIGIN,
+].filter(Boolean);
+
 app.use(
   cors({
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin(origin, cb) {
+      // allow requests without Origin (curl/health checks)
+      if (!origin) return cb(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+      return cb(new Error("Not allowed by CORS"));
+    },
     credentials: true,
   })
 );
+
 app.use(rateLimit({ windowMs: 60_000, max: 300 }));
 
-/* ========= Static uploads (ABSOLUTE & CONSISTENT) ========= */
-const uploadDirEnv = process.env.UPLOAD_DIR || "uploads";// gunakan "uploads" (tanpa ./) sebagai default
-const UPLOAD_DIR_ABS = path.isAbsolute(uploadDirEnv)
-  ? uploadDirEnv
-  : path.resolve(__dirname, "..", uploadDirEnv);
-
-console.log("📁 Serving uploads from:", UPLOAD_DIR_ABS);
-app.use("/uploads", express.static(UPLOAD_DIR_ABS));
+/* ========= (No more static /uploads; files live in Supabase) ========= */
+// If you still want to keep it harmlessly:
+// app.use("/uploads", express.static(path.resolve(__dirname, "..", "uploads")));
 
 /* ========= Health ========= */
 app.get("/health", (_req, res) => res.json({ ok: true }));
@@ -60,14 +68,14 @@ const server = http.createServer(app);
 
 export const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CLIENT_ORIGIN || "http://localhost:5173",
+    origin: ALLOWED_ORIGINS.length ? ALLOWED_ORIGINS : "http://localhost:5173",
     methods: ["GET", "POST"],
     credentials: true,
   },
   transports: ["websocket", "polling"],
 });
 
-// 🔐 autentikasi JWT 
+// 🔐 autentikasi JWT untuk Socket.IO
 io.use((socket, next) => {
   try {
     const token = socket.handshake.auth?.token;
