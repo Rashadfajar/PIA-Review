@@ -1,37 +1,22 @@
 import { Router } from "express";
 import multer from "multer";
-import fs from "fs";
-import fsPromises from "fs/promises";
-import path from "path";
-import { fileURLToPath } from "url";
 import { prisma } from "../prisma.js";
 import { authRequired } from "../middleware/auth.js";
+import { createClient } from "@supabase/supabase-js";
 
 const router = Router();
 
-// --- Pastikan path upload konsisten & absolut ---
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const uploadDirEnv = process.env.UPLOAD_DIR || "uploads";
+/** ========= Supabase client ========= */
+const supabase = createClient(
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_SERVICE_ROLE_KEY
+);
+const BUCKET = process.env.SUPABASE_BUCKET || "uploads";
 
-// Pastikan selalu di root project/backend, bukan src/
-const uploadDirAbs = path.isAbsolute(uploadDirEnv)
-  ? uploadDirEnv
-  : path.resolve(__dirname, "..", "..", uploadDirEnv);
-
-fs.mkdirSync(uploadDirAbs, { recursive: true });
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDirAbs),
-  filename: (_req, file, cb) => {
-    const safe = Date.now() + "_" + file.originalname.replace(/[^\w.\-]+/g, "_");
-    cb(null, safe);
-  },
-});
-
-
+/** ========= Multer: simpan di memory, bukan disk ========= */
 const upload = multer({
-  storage,
-  limits: { fileSize: 50 * 1024 * 1024 }, // 50MB (atur sesuai kebutuhan)
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
   fileFilter: (_req, file, cb) => {
     const allowed = ["application/pdf", "image/jpeg", "image/png", "image/gif"];
     if (allowed.includes(file.mimetype)) cb(null, true);
@@ -39,19 +24,30 @@ const upload = multer({
   },
 });
 
-// helper absolute URL (opsional)
-function toAbsoluteUrl(req, relativePath) {
-  try {
-    const origin =
-      process.env.PUBLIC_BASE_URL ||
-      `${req.protocol}://${req.get("host")}`;
-    return new URL(relativePath, origin).toString();
-  } catch {
-    return relativePath;
-  }
+/** ========= Helper ========= */
+// Buat path objek yang rapi & unik di bucket
+function makeObjectPath(userId, originalName) {
+  const ts = Date.now();
+  const safe = (originalName || "file")
+    .replace(/[^\w.\-]+/g, "_")
+    .replace(/^_+/, "");
+  return `docs/${userId || "public"}/${ts}_${safe}`;
 }
 
-// daftar file
+// Ekstrak objectPath dari public URL Supabase (tanpa ubah skema DB)
+// Contoh URL: https://<ref>.supabase.co/storage/v1/object/public/<bucket>/<objectPath>
+function extractObjectPathFromPublicUrl(url) {
+  if (!url) return null;
+  const m = url.match(/\/storage\/v1\/object\/public\/[^/]+\/(.+)$/);
+  return m ? decodeURIComponent(m[1]) : null;
+}
+
+// (Opsional) jika kamu masih butuh absolute url builder, tapi sekarang file.url sudah absolute
+function toAbsoluteUrl(_req, maybeAbsolute) {
+  return maybeAbsolute; // sudah absolute dari Supabase
+}
+
+/** ========= LIST FILES ========= */
 router.get("/", authRequired, async (req, res) => {
   try {
     const files = await prisma.file.findMany({
@@ -69,10 +65,9 @@ router.get("/", authRequired, async (req, res) => {
       orderBy: { createdAt: "desc" },
     });
 
-    // opsional: tambahkan absoluteUrl ke respon
     const out = files.map((f) => ({
       ...f,
-      absoluteUrl: toAbsoluteUrl(req, f.url),
+      absoluteUrl: toAbsoluteUrl(req, f.url), // sekarang f.url sudah public URL permanen
     }));
 
     res.json(out);
@@ -82,16 +77,17 @@ router.get("/", authRequired, async (req, res) => {
   }
 });
 
-// upload file
+/** ========= UPLOAD FILE (to Supabase) ========= */
 router.post("/", authRequired, upload.single("file"), async (req, res) => {
   if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
   try {
-    const isPublic = req.body.isPublic === "true" || req.body.isPublic === true;
+    const isPublic =
+      req.body.isPublic === "true" || req.body.isPublic === true;
 
+    // allowedEmails parsing (sama seperti sebelumnya)
     let allowedEmails = [];
     const raw = req.body.allowedEmails;
-
     if (!isPublic) {
       if (Array.isArray(raw)) {
         allowedEmails = raw;
@@ -103,23 +99,42 @@ router.post("/", authRequired, upload.single("file"), async (req, res) => {
           allowedEmails = [raw];
         }
       }
-      allowedEmails = Array.from(new Set(allowedEmails.map((e) => e.trim()).filter(Boolean)));
+      allowedEmails = Array.from(
+        new Set(allowedEmails.map((e) => e.trim()).filter(Boolean))
+      );
     }
 
-    const url = "/uploads/" + req.file.filename;
+    // === Upload ke Supabase Storage ===
+    const objectPath = makeObjectPath(req.user?.id, req.file.originalname);
+    const { error: upErr } = await supabase.storage
+      .from(BUCKET)
+      .upload(objectPath, req.file.buffer, {
+        contentType: req.file.mimetype || "application/octet-stream",
+        upsert: false,
+      });
+    if (upErr) {
+      console.error("Supabase upload error:", upErr.message);
+      return res.status(500).json({ error: "Failed to upload to storage" });
+    }
 
+    // Public URL permanen dari bucket publik
+    const { data: pub } = supabase.storage.from(BUCKET).getPublicUrl(objectPath);
+    const publicUrl = pub?.publicUrl;
+
+    // Simpan metadata ke DB (tanpa ubah skema, kolom url = publicUrl)
     const file = await prisma.file.create({
       data: {
         ownerId: req.user.id,
-        name: req.file.filename,
+        name: objectPath.split("/").pop(), // nama di storage
         originalName: req.file.originalname,
         mime: req.file.mimetype,
         size: req.file.size,
-        url,
-        isPublic,
+        url: publicUrl, // <— permanen dari Supabase (public)
+        isPublic, // kontrol akses aplikasi (bukan storage)
       },
     });
 
+    // Access control (aplikasi) seperti sebelumnya
     if (!isPublic && allowedEmails.length) {
       const users = await prisma.user.findMany({
         where: { email: { in: allowedEmails } },
@@ -131,10 +146,14 @@ router.post("/", authRequired, upload.single("file"), async (req, res) => {
       const unknown = allowedEmails.filter((e) => !foundEmails.has(e));
 
       if (unknown.length) {
-        return res.status(400).json({ error: `Unknown users: ${unknown.join(", ")}` });
+        return res
+          .status(400)
+          .json({ error: `Unknown users: ${unknown.join(", ")}` });
       }
 
-      const uniqueIds = Array.from(new Set(foundIds.filter((uid) => uid !== req.user.id)));
+      const uniqueIds = Array.from(
+        new Set(foundIds.filter((uid) => uid !== req.user.id))
+      );
       if (uniqueIds.length) {
         await prisma.fileAccess.createMany({
           data: uniqueIds.map((uid) => ({ fileId: file.id, userId: uid })),
@@ -142,15 +161,14 @@ router.post("/", authRequired, upload.single("file"), async (req, res) => {
       }
     }
 
-    // tambahkan absoluteUrl (opsional)
-    res.json({ ...file, absoluteUrl: toAbsoluteUrl(req, url) });
+    res.json({ ...file, absoluteUrl: publicUrl });
   } catch (err) {
     console.error("❌ File upload failed:", err);
     res.status(500).json({ error: "File upload failed" });
   }
 });
 
-// update akses
+/** ========= UPDATE AKSES (app-level) ========= */
 router.patch("/:id/access", authRequired, async (req, res) => {
   try {
     const file = await prisma.file.findUnique({ where: { id: req.params.id } });
@@ -158,7 +176,8 @@ router.patch("/:id/access", authRequired, async (req, res) => {
     if (file.ownerId !== req.user.id)
       return res.status(403).json({ error: "Forbidden" });
 
-    const isPublic = req.body.isPublic === true || req.body.isPublic === "true";
+    const isPublic =
+      req.body.isPublic === true || req.body.isPublic === "true";
 
     const updated = await prisma.file.update({
       where: { id: file.id },
@@ -166,15 +185,23 @@ router.patch("/:id/access", authRequired, async (req, res) => {
     });
 
     if (!isPublic) {
-      // (opsional) dukung string juga seperti POST
       const raw = req.body.allowedEmails;
       const emails = Array.isArray(raw)
         ? raw
         : (typeof raw === "string" && raw.trim()
-            ? (() => { try { const p = JSON.parse(raw); return Array.isArray(p) ? p : [raw]; } catch { return [raw]; } })()
+            ? (() => {
+                try {
+                  const p = JSON.parse(raw);
+                  return Array.isArray(p) ? p : [raw];
+                } catch {
+                  return [raw];
+                }
+              })()
             : []);
 
-      const cleaned = Array.from(new Set(emails.map((e) => e.trim()).filter(Boolean)));
+      const cleaned = Array.from(
+        new Set(emails.map((e) => e.trim()).filter(Boolean))
+      );
 
       const users = await prisma.user.findMany({
         where: { email: { in: cleaned } },
@@ -184,7 +211,9 @@ router.patch("/:id/access", authRequired, async (req, res) => {
       const ids = users.map((u) => u.id);
       await prisma.fileAccess.deleteMany({ where: { fileId: file.id } });
 
-      const uniqueIds = Array.from(new Set(ids.filter((uid) => uid !== req.user.id)));
+      const uniqueIds = Array.from(
+        new Set(ids.filter((uid) => uid !== req.user.id))
+      );
       if (uniqueIds.length) {
         await prisma.fileAccess.createMany({
           data: uniqueIds.map((uid) => ({ fileId: file.id, userId: uid })),
@@ -201,7 +230,7 @@ router.patch("/:id/access", authRequired, async (req, res) => {
   }
 });
 
-// hapus file
+/** ========= DELETE FILE (from Supabase) ========= */
 router.delete("/:id", authRequired, async (req, res) => {
   try {
     const f = await prisma.file.findUnique({ where: { id: req.params.id } });
@@ -209,17 +238,18 @@ router.delete("/:id", authRequired, async (req, res) => {
     if (f.ownerId !== req.user.id)
       return res.status(403).json({ error: "Forbidden" });
 
-    // Hapus file fisik
-    if (f.url) {
-      const base = path.basename(f.url);
-      const filePath = path.join(uploadDirAbs, base); // gunakan path absolut yang sama
-      try {
-        await fsPromises.access(filePath);
-        await fsPromises.unlink(filePath);
-        console.log("Deleted file:", filePath);
-      } catch (e) {
-        console.warn("File not found or failed to delete:", filePath, e.message);
+    // Hapus objek di Supabase Storage (ekstrak path dari public URL)
+    const objectPath = extractObjectPathFromPublicUrl(f.url);
+    if (objectPath) {
+      const { error: delErr } = await supabase
+        .storage
+        .from(BUCKET)
+        .remove([objectPath]);
+      if (delErr) {
+        console.warn("Storage remove warning:", delErr.message);
       }
+    } else {
+      console.warn("Cannot extract objectPath from URL:", f.url);
     }
 
     await prisma.comment.deleteMany({ where: { fileId: f.id } });

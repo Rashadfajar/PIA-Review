@@ -7,34 +7,24 @@ const RAW_API_BASE =
 function normalizeBase(raw) {
   try {
     let base = String(raw || "").trim();
-
-    // Kalau kosong → default ke localhost:4000
     if (!base) return "http://localhost:4000";
-
-    // Izinkan bentuk //host:port → tambahkan protokol saat runtime
     if (base.startsWith("//")) {
       return `${window.location.protocol}${base}`.replace(/\/+$/, "");
     }
-
-    // Kalau cuma port (":4000") atau path relatif → jadikan absolut relatif ke origin FE
-    // new URL akan me-resolve relatif dengan benar
     const u = new URL(base, window.location.origin);
     return u.origin.replace(/\/+$/, "");
   } catch {
-    // Kalau env tidak valid, fallback aman
     return "http://localhost:4000";
   }
 }
 
 export const API_BASE = normalizeBase(RAW_API_BASE);
 
-// Utility header auth
 export function authHeader() {
   const t = localStorage.getItem("token");
   return t ? { Authorization: `Bearer ${t}` } : {};
 }
 
-// Timeout helper
 function withTimeout(ms = 15000) {
   const ac = new AbortController();
   const id = setTimeout(() => ac.abort("timeout"), ms);
@@ -46,12 +36,10 @@ async function parseJsonSafe(res) {
 }
 
 function buildUrl(path) {
-  // Pastikan path diawali "/" agar join-nya konsisten
   const p = path?.startsWith("/") ? path : `/${path || ""}`;
   return `${API_BASE}${p}`;
 }
 
-// === Request helpers ===
 export async function apiJson(path, { method = "GET", headers = {}, body, timeoutMs = 15000 } = {}) {
   const { signal, done } = withTimeout(timeoutMs);
   try {
@@ -66,8 +54,7 @@ export async function apiJson(path, { method = "GET", headers = {}, body, timeou
     return data;
   } catch (err) {
     if (err.name === "AbortError" || err.message === "timeout") throw new Error("Request timeout");
-    if (err.message?.includes("Failed to fetch") || err.message === "NetworkError when attempting to fetch resource.")
-      throw new Error("Network error (server unreachable)");
+    if (err.message?.includes("Failed to fetch")) throw new Error("Network error (server unreachable)");
     throw err;
   } finally {
     done();
@@ -95,16 +82,13 @@ export async function apiForm(path, formData, { method = "POST", headers = {}, t
   }
 }
 
-// === File URL helper (paling aman untuk viewer) ===
+// === File URL helper ===
 export const fileUrl = (file) => {
-  // Backend-mu sudah mengirim absoluteUrl; pakai itu kalau ada
-  if (file?.absoluteUrl) return file.absoluteUrl;
-  if (file?.url) return buildUrl(file.url);
-  return "";
+  const u = file?.absoluteUrl || file?.url || "";
+  if (/^https?:\/\//i.test(u)) return u; // sudah absolute (Supabase public URL)
+  return u ? buildUrl(u) : "";
 };
 
-// Optional: warning kalau base-nya tidak absolut (biar gampang debug)
 if (!/^https?:\/\/[^/]+$/i.test(API_BASE)) {
-  // eslint-disable-next-line no-console
   console.warn("[api] Suspicious API_BASE:", API_BASE, "raw:", RAW_API_BASE);
 }
